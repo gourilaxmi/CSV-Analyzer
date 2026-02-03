@@ -1,38 +1,41 @@
 # Chemical Equipment Data Visualizer
 
-A full-stack application for uploading, processing, and visualizing chemical equipment data with Django REST API backend, React web frontend, and PyQt5 desktop application.
+A full-stack application for uploading, processing, and visualizing chemical equipment data with **Django REST API backend**, **React web frontend**, and **PyQt5 desktop application**.
 
-
-##  Installation & Setup
+## 🚀 Installation & Setup
 
 ### 1. Clone the Repository
 
+```bash
 git clone <repository-url>
 cd screening_task
-\
+```
+
+---
 
 ### 2. Backend Setup (Django)
 
 #### Step 2.1: Create Virtual Environment
 
-Windows:
-
+**Windows:**
+```bash
 cd backend
 python -m venv venv
 venv\Scripts\activate
+```
 
-
-macOS/Linux:
-
+**macOS/Linux:**
+```bash
 cd backend
 python3 -m venv venv
 source venv/bin/activate
-
+```
 
 #### Step 2.2: Install Dependencies
 
+```bash
 pip install -r requirements.txt
-
+```
 
 **Backend `requirements.txt` includes:**
 ```txt
