@@ -56,15 +56,7 @@ python manage.py makemigrations
 python manage.py migrate
 ```
 
-#### Step 2.4: Create Superuser
-
-```bash
-python manage.py createsuperuser
-```
-
-Follow prompts to set username, email, and password.
-
-#### Step 2.5: Create Media Directories
+#### Step 2.4: Create Media Directories
 
 ```bash
 # Windows
@@ -74,7 +66,7 @@ mkdir media\uploads media\charts media\reports
 mkdir -p media/uploads media/charts media/reports
 ```
 
-#### Step 2.6: Run Development Server
+#### Step 2.5: Run Development Server
 
 ```bash
 python manage.py runserver
@@ -161,27 +153,6 @@ pip install PyQt5==5.15.10 matplotlib==3.8.2 Pillow==10.1.0 requests==2.31.0
 pip install -r requirements.txt
 ```
 
-**Option C - Automated Setup Scripts:**
-
-**Windows:**
-```bash
-setup.bat
-```
-
-**macOS/Linux:**
-```bash
-chmod +x setup.sh
-./setup.sh
-```
-
-#### Step 4.4: Verify Installation
-
-```bash
-python test_installation.py
-```
-
-This will check if all dependencies are correctly installed and if the backend is accessible.
-
 #### Step 4.5: Run Desktop Application
 
 ```bash
@@ -227,7 +198,6 @@ python desktop_app.py
 1. **Register/Login**
    - Navigate to http://localhost:3000
    - Click "Register" to create an account or "Login" with existing credentials
-   - Use the superuser credentials you created during backend setup
 
 2. **Upload Dataset**
    - Click "Upload Dataset" or navigate to upload page
