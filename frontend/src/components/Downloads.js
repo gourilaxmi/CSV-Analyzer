@@ -168,7 +168,7 @@ function Downloads({ user, onLogout }) {
       <main className="downloads-content">
         <div className="downloads-container">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2>Recent Uploads (Last 5)</h2>
+            <h2>Recent Uploads</h2>
             {datasets.some(d => d.status === 'processing' || d.status === 'pending') && (
               <span style={{ color: '#60a5fa', fontSize: '14px' }}>
                 Auto-refreshing...

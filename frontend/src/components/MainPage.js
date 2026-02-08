@@ -1,21 +1,87 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch, isAuthenticated } from './apiHelper';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+import { Bar, Pie, Line } from 'react-chartjs-2';
 import './MainPage.css';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend
+);
 
 function MainPage({ user, onLogout }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [currentDatasetId, setCurrentDatasetId] = useState(null);
+  const [analysisData, setAnalysisData] = useState(null);
+  const [processingStatus, setProcessingStatus] = useState(null);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
+  const pollIntervalRef = useRef(null);
 
   useEffect(() => {
     if (!isAuthenticated()) {
       navigate('/login');
     }
   }, [navigate]);
+
+  useEffect(() => {
+    if (currentDatasetId && processingStatus !== 'completed' && processingStatus !== 'failed') {
+      pollIntervalRef.current = setInterval(() => {
+        checkDatasetStatus(currentDatasetId);
+      }, 2000); 
+      return () => {
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+        }
+      };
+    }
+  }, [currentDatasetId, processingStatus]);
+
+  const checkDatasetStatus = async (datasetId) => {
+    try {
+      const response = await apiFetch(`http://localhost:8000/api/dataset-status/${datasetId}/`);
+      if (response.ok) {
+        const data = await response.json();
+        setProcessingStatus(data.status);
+        
+        if (data.status === 'completed' && data.analysis) {
+          setAnalysisData(data.analysis);
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+          }
+        } else if (data.status === 'failed') {
+          setUploadError(data.error || 'Analysis failed. Please check your CSV file and try again.');
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error checking status:', error);
+    }
+  };
 
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
@@ -27,6 +93,9 @@ function MainPage({ user, onLogout }) {
       }
       setSelectedFile(file);
       setUploadError('');
+      setAnalysisData(null);
+      setCurrentDatasetId(null);
+      setProcessingStatus(null);
     }
   };
 
@@ -40,10 +109,11 @@ function MainPage({ user, onLogout }) {
       }
       setSelectedFile(file);
       setUploadError('');
+      setAnalysisData(null);
+      setCurrentDatasetId(null);
+      setProcessingStatus(null);
     }
   };
-
-
 
   const handleUpload = async () => {
     if (!selectedFile) {
@@ -59,6 +129,7 @@ function MainPage({ user, onLogout }) {
 
     setIsUploading(true);
     setUploadError('');
+    setAnalysisData(null);
 
     const formData = new FormData();
     formData.append('dataset_file', selectedFile);
@@ -71,12 +142,8 @@ function MainPage({ user, onLogout }) {
 
       if (response.ok) {
         const data = await response.json();
-        alert('CSV uploaded successfully! Analysis is running in the background.');
-        setSelectedFile(null);
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
-        navigate('/downloads');
+        setCurrentDatasetId(data.dataset_id);
+        setProcessingStatus(data.status);
       } else {
         const data = await response.json();
         if (data.dataset_file) {
@@ -84,12 +151,29 @@ function MainPage({ user, onLogout }) {
         } else {
           setUploadError(data.error || 'Upload failed. Please try again.');
         }
+        setProcessingStatus('failed');
       }
     } catch (error) {
       console.error('Upload error:', error);
       setUploadError('Something went wrong. Please try again.');
+      setProcessingStatus('failed');
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleTryAgain = () => {
+    // Reset all states to allow retry
+    setSelectedFile(null);
+    setCurrentDatasetId(null);
+    setProcessingStatus(null);
+    setAnalysisData(null);
+    setUploadError('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
     }
   };
 
@@ -111,6 +195,126 @@ function MainPage({ user, onLogout }) {
 
   const handleDownloadsClick = () => {
     navigate('/downloads');
+  };
+
+  const downloadPDF = async () => {
+    if (!currentDatasetId) return;
+    
+    try {
+      const response = await apiFetch(`http://localhost:8000/api/download-pdf/${currentDatasetId}/`);
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `analysis_report_${currentDatasetId}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }
+    } catch (error) {
+      console.error('Download error:', error);
+    }
+  };
+
+  // Prepare chart data
+  const getEquipmentDistributionData = () => {
+    if (!analysisData?.equipment_distribution) return null;
+    
+    const labels = Object.keys(analysisData.equipment_distribution);
+    const data = Object.values(analysisData.equipment_distribution);
+    
+    return {
+      labels,
+      datasets: [{
+        label: 'Equipment Count',
+        data,
+        backgroundColor: [
+          'rgba(75, 192, 192, 0.6)',
+          'rgba(255, 99, 132, 0.6)',
+          'rgba(54, 162, 235, 0.6)',
+          'rgba(255, 206, 86, 0.6)',
+          'rgba(153, 102, 255, 0.6)',
+        ],
+        borderColor: [
+          'rgba(75, 192, 192, 1)',
+          'rgba(255, 99, 132, 1)',
+          'rgba(54, 162, 235, 1)',
+          'rgba(255, 206, 86, 1)',
+          'rgba(153, 102, 255, 1)',
+        ],
+        borderWidth: 2,
+      }],
+    };
+  };
+
+  const getEquipmentAveragesData = (field) => {
+    if (!analysisData?.equipment_averages) return null;
+    
+    const labels = Object.keys(analysisData.equipment_averages);
+    const data = labels.map(equipment => 
+      analysisData.equipment_averages[equipment][field] || 0
+    );
+    
+    return {
+      labels,
+      datasets: [{
+        label: `Average ${field}`,
+        data,
+        backgroundColor: 'rgba(54, 162, 235, 0.6)',
+        borderColor: 'rgba(54, 162, 235, 1)',
+        borderWidth: 2,
+      }],
+    };
+  };
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'top',
+        labels: {
+          color: 'white',
+          font: { size: 12 }
+        }
+      },
+      title: {
+        display: true,
+        color: 'white',
+        font: { size: 14, weight: 'bold' }
+      },
+    },
+    scales: {
+      x: {
+        ticks: { color: 'white' },
+        grid: { color: 'rgba(255, 255, 255, 0.1)' }
+      },
+      y: {
+        ticks: { color: 'white' },
+        grid: { color: 'rgba(255, 255, 255, 0.1)' }
+      }
+    }
+  };
+
+  const pieOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'right',
+        labels: {
+          color: 'white',
+          font: { size: 12 }
+        }
+      },
+      title: {
+        display: true,
+        color: 'white',
+        font: { size: 14, weight: 'bold' }
+      },
+    }
   };
 
   return (
@@ -150,6 +354,7 @@ function MainPage({ user, onLogout }) {
           <div 
             className="upload-area"
             onDrop={handleDrop}
+            onDragOver={(e) => e.preventDefault()}
             onClick={() => fileInputRef.current?.click()}
           >
             <div className="upload-icon-container">
@@ -172,7 +377,6 @@ function MainPage({ user, onLogout }) {
             <button className="choose-files-btn">
               CHOOSE FILES
             </button>
-            
             
             <input
               ref={fileInputRef}
@@ -203,11 +407,23 @@ function MainPage({ user, onLogout }) {
 
           {uploadError && (
             <div className="error-message">
-              {uploadError}
+              <p>{uploadError}</p>
+              {processingStatus === 'failed' && (
+                <button className="try-again-btn" onClick={handleTryAgain}>
+                  Try Again
+                </button>
+              )}
             </div>
           )}
 
-          {selectedFile && (
+          {processingStatus && processingStatus !== 'completed' && processingStatus !== 'failed' && (
+            <div className="processing-message">
+              <div className="spinner"></div>
+              <span>Processing your data... Status: {processingStatus}</span>
+            </div>
+          )}
+
+          {selectedFile && !currentDatasetId && (
             <button 
               className="upload-btn"
               onClick={handleUpload}
@@ -222,6 +438,94 @@ function MainPage({ user, onLogout }) {
                 'Upload & Analyze'
               )}
             </button>
+          )}
+
+          {/* Analysis Results Section */}
+          {analysisData && (
+            <div className="analysis-results">
+              <div className="results-header">
+                <h3>Analysis Results</h3>
+                <button className="download-pdf-btn" onClick={downloadPDF}>
+                  Download PDF Report
+                </button>
+              </div>
+
+              <div className="stats-summary">
+                <div className="stat-card">
+                  <h4>Total Records</h4>
+                  <p>{analysisData.total_rows}</p>
+                </div>
+                <div className="stat-card">
+                  <h4>Equipment Types</h4>
+                  <p>{Object.keys(analysisData.equipment_distribution || {}).length}</p>
+                </div>
+              </div>
+
+              {/* Equipment Distribution Pie Chart */}
+              {analysisData.equipment_distribution && (
+                <div className="chart-container">
+                  <h4 className="chart-title">Equipment Type Distribution</h4>
+                  <div className="chart-wrapper">
+                    <Pie 
+                      data={getEquipmentDistributionData()} 
+                      options={{
+                        ...pieOptions,
+                        plugins: {
+                          ...pieOptions.plugins,
+                          title: { ...pieOptions.plugins.title, text: 'Equipment Distribution' }
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Equipment Averages Bar Charts */}
+              {analysisData.equipment_averages && Object.keys(analysisData.equipment_averages).length > 0 && (
+                <div className="averages-section">
+                  <h4 className="section-subtitle">Equipment Performance Metrics</h4>
+                  {Object.keys(Object.values(analysisData.equipment_averages)[0] || {}).map(field => (
+                    <div key={field} className="chart-container">
+                      <h5 className="chart-title">Average {field} by Equipment</h5>
+                      <div className="chart-wrapper">
+                        <Bar 
+                          data={getEquipmentAveragesData(field)} 
+                          options={{
+                            ...chartOptions,
+                            plugins: {
+                              ...chartOptions.plugins,
+                              title: { ...chartOptions.plugins.title, text: `${field} Comparison` }
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Field Statistics Table */}
+              {analysisData.field_statistics && (
+                <div className="statistics-table">
+                  <h4 className="section-subtitle">Field Statistics</h4>
+                  {Object.entries(analysisData.field_statistics).map(([field, stats]) => (
+                    <div key={field} className="stat-table-card">
+                      <h5>{field}</h5>
+                      <table>
+                        <tbody>
+                          {Object.entries(stats).map(([metric, value]) => (
+                            <tr key={metric}>
+                              <td>{metric}</td>
+                              <td>{typeof value === 'number' ? value.toFixed(2) : value}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
       </main>

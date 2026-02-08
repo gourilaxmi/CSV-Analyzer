@@ -1,6 +1,8 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
+from django.db.models import Q
+from django.contrib.auth import authenticate
 
 
 class User1(serializers.ModelSerializer):
@@ -68,16 +70,17 @@ class ChangePassword(serializers.Serializer):
 
 
 class PasswordResetRequest(serializers.Serializer):
-    username = serializers.CharField(required=True)
+    login_id = serializers.CharField(required=True)
     
-    def validate_username(self, value):
-        if not User.objects.filter(username=value).exists():
-            raise serializers.ValidationError("No user found with this username.")
+    def validate_login_id(self, value):
+        # Check if a user exists with either this username OR this email
+        if not User.objects.filter(Q(username=value) | Q(email=value)).exists():
+            raise serializers.ValidationError("No user found with this username or email.")
         return value
 
 
 class PasswordResetConfirm(serializers.Serializer):
-    username = serializers.CharField(required=True)
+    login_id = serializers.CharField(required=True)
     new_password = serializers.CharField(
         required=True,
         write_only=True,
@@ -92,7 +95,13 @@ class PasswordResetConfirm(serializers.Serializer):
             )
         return attrs
     
-    def validate_username(self, value):
-        if not User.objects.filter(username=value).exists():
-            raise serializers.ValidationError("No user found with this username.")
+    def validate_login_id(self, value):
+        # Check if user exists with username or email
+        if not User.objects.filter(Q(username=value) | Q(email=value)).exists():
+            raise serializers.ValidationError("No user found with this username or email.")
         return value
+
+
+class Login(serializers.Serializer):
+    login_id = serializers.CharField(required=True)
+    password = serializers.CharField(required=True, write_only=True)

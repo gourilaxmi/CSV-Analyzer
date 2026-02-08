@@ -4,19 +4,20 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.views import TokenObtainPairView
 from django.contrib.auth.models import User
+from django.db.models import Q
+from django.contrib.auth import authenticate
 
 from .serializers import (
     Register, 
     User1, 
     ChangePassword,
     PasswordResetRequest,
-    PasswordResetConfirm
+    PasswordResetConfirm,
+    Login
 )
 
 class RegisterView(generics.CreateAPIView):
-   
     queryset = User.objects.all()
     permission_classes = [AllowAny]
     serializer_class = Register
@@ -26,7 +27,6 @@ class RegisterView(generics.CreateAPIView):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
         
-        # Generate tokens so user doesn't need to login again after signup
         refresh = RefreshToken.for_user(user)
         
         return Response({
@@ -39,36 +39,56 @@ class RegisterView(generics.CreateAPIView):
         }, status=status.HTTP_201_CREATED)
 
 
+class LoginView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = Login(data=request.data)
+        if serializer.is_valid():
+            login_id = serializer.validated_data['login_id']
+            password = serializer.validated_data['password']
+
+            try:
+                user_obj = User.objects.get(Q(username=login_id) | Q(email=login_id))
+            except User.DoesNotExist:
+                return Response({'error': 'Invalid Credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+
+            user = authenticate(username=user_obj.username, password=password)
+
+            if user:
+                refresh = RefreshToken.for_user(user)
+                return Response({
+                    'user': User1(user).data,
+                    'tokens': {
+                        'refresh': str(refresh),
+                        'access': str(refresh.access_token),
+                    },
+                    'message': 'Login successful'
+                }, status=status.HTTP_200_OK)
+            
+            return Response({'error': 'Invalid Credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
 class LogoutView(APIView):
-    #logout by blacklisting refresh token
     permission_classes = [IsAuthenticated]
     
     def post(self, request):
-        # Frontend must send refresh token for logout
         try:
             refresh_token = request.data.get('refresh')
             if not refresh_token:
-                return Response(
-                    {'error': 'Refresh token is required'}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                return Response({'error': 'Refresh token is required'}, status=status.HTTP_400_BAD_REQUEST)
             
             token = RefreshToken(refresh_token)
             token.blacklist()
             
-            return Response(
-                {'message': 'Logout successful'}, 
-                status=status.HTTP_200_OK
-            )
+            return Response({'message': 'Logout successful'}, status=status.HTTP_200_OK)
         except Exception as e:
-            return Response(
-                {'error': str(e)}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class UserProfileView(generics.RetrieveUpdateAPIView):
-    
     permission_classes = [IsAuthenticated]
     serializer_class = User1
     
@@ -77,27 +97,18 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
 
 
 class ChangePasswordView(APIView):
-    
     permission_classes = [IsAuthenticated]
     
     def post(self, request):
         serializer = ChangePassword(data=request.data)
         if serializer.is_valid():
             user = request.user
-           
             if not user.check_password(serializer.validated_data['old_password']):
-                return Response(
-                    {'error': 'Old password is incorrect'}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                return Response({'error': 'Old password is incorrect'}, status=status.HTTP_400_BAD_REQUEST)
             
             user.set_password(serializer.validated_data['new_password'])
             user.save()
-            
-            return Response(
-                {'message': 'Password changed successfully'}, 
-                status=status.HTTP_200_OK
-            )
+            return Response({'message': 'Password changed successfully'}, status=status.HTTP_200_OK)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -108,21 +119,8 @@ class PasswordResetRequestView(APIView):
     def post(self, request):
         serializer = PasswordResetRequest(data=request.data)
         if serializer.is_valid():
-            username = serializer.validated_data['username']
-            
-            # Verify user exists (already validated in serializer)
-            try:
-                user = User.objects.get(username=username)
-                return Response(
-                    {'message': 'User verified. You can now reset your password.'}, 
-                    status=status.HTTP_200_OK
-                )
-            except User.DoesNotExist:
-                return Response(
-                    {'error': 'User not found'}, 
-                    status=status.HTTP_404_NOT_FOUND
-                )
-        
+            # Simply confirms the user exists before showing the reset modal
+            return Response({'message': 'User verified. You can now reset your password.'}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -132,24 +130,17 @@ class PasswordResetConfirmView(APIView):
     def post(self, request):
         serializer = PasswordResetConfirm(data=request.data)
         if serializer.is_valid():
+            login_id = serializer.validated_data['login_id']
             try:
-                username = serializer.validated_data['username']
-                user = User.objects.get(username=username)
+                # Find user by username or email
+                user = User.objects.get(Q(username=login_id) | Q(email=login_id))
                 
-                # Set new password
                 user.set_password(serializer.validated_data['new_password'])
                 user.save()
                 
-                return Response(
-                    {'message': 'Password reset successful'}, 
-                    status=status.HTTP_200_OK
-                )
-                
+                return Response({'message': 'Password reset successful'}, status=status.HTTP_200_OK)
             except User.DoesNotExist:
-                return Response(
-                    {'error': 'User not found'}, 
-                    status=status.HTTP_404_NOT_FOUND
-                )
+                return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

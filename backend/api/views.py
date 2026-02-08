@@ -1,5 +1,6 @@
 import logging
-from django.http import FileResponse
+import json
+from django.http import FileResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 
 from rest_framework.views import APIView
@@ -28,10 +29,36 @@ class DatasetUpload(APIView):
         start_processing_thread(dataset.id)
 
         return Response({
-            "message": "File uploaded. Pls wait while pdf is being generated. Pls visit Downloads to get the pdf",
+            "message": "File uploaded successfully. Analysis is in progress.",
             "dataset_id": dataset.id,
-            "check_status_at": f"/api/datasets/"
+            "status": "pending"
         }, status=status.HTTP_202_ACCEPTED)
+
+
+class DatasetStatus(APIView):
+    """Check dataset processing status and get analysis results"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, dataset_id):
+        dataset = get_object_or_404(Dataset, id=dataset_id, user=request.user)
+        
+        response_data = {
+            "dataset_id": dataset.id,
+            "status": dataset.status,
+            "uploaded_at": dataset.uploaded_at
+        }
+        
+        if dataset.status == 'failed':
+            response_data['error'] = dataset.error_log
+        
+        if dataset.status == 'completed' and dataset.analysis_results:
+            try:
+                response_data['analysis'] = json.loads(dataset.analysis_results)
+            except json.JSONDecodeError:
+                logger.error(f"Failed to parse analysis results for dataset {dataset_id}")
+        
+        return Response(response_data)
+
 
 class UserDatasetList(ListAPIView):
     permission_classes = [IsAuthenticated]

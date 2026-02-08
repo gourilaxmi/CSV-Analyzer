@@ -12,6 +12,7 @@ class Dataset(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="datasets")
     dataset_file = models.FileField(upload_to="datasets/")
     pdf_file = models.FileField(upload_to="pdfs/", null=True, blank=True)
+    analysis_results = models.TextField(null=True, blank=True)  
     
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     error_log = models.TextField(null=True, blank=True)

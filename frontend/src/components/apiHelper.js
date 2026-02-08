@@ -1,5 +1,17 @@
 const BASE_URL = 'http://localhost:8000';
 
+let isRefreshing = false;
+let refreshSubscribers = [];
+
+function subscribeTokenRefresh(cb) {
+  refreshSubscribers.push(cb);
+}
+
+function onRefreshed(token) {
+  refreshSubscribers.forEach((cb) => cb(token));
+  refreshSubscribers = [];
+}
+
 async function refreshAccessToken() {
   const refreshToken = localStorage.getItem('refresh_token');
   if (!refreshToken) return null;
@@ -16,25 +28,16 @@ async function refreshAccessToken() {
       localStorage.setItem('access_token', data.access);
       return data.access;
     }
-
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user');
-    window.location.href = '/login';
-    return null;
   } catch (error) {
-    console.error('Token refresh error:', error);
-   
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user');
-    window.location.href = '/login';
-    return null;
+    console.error('CRITICAL: Token refresh network error:', error);
   }
+
+  logout();
+  return null;
 }
 
 export async function apiFetch(url, options = {}) {
-  const token = localStorage.getItem('access_token');
+  let token = localStorage.getItem('access_token');
 
   if (!token) {
     window.location.href = '/login';
@@ -46,14 +49,34 @@ export async function apiFetch(url, options = {}) {
     Authorization: `Bearer ${token}`,
   };
 
+  if (!(options.body instanceof FormData) && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
+
   let response = await fetch(url, { ...options, headers });
 
   if (response.status === 401) {
-    const newToken = await refreshAccessToken();
-    if (newToken) {
-      headers.Authorization = `Bearer ${newToken}`;
-      response = await fetch(url, { ...options, headers });
+    if (!isRefreshing) {
+      isRefreshing = true;
+
+      const newToken = await refreshAccessToken();
+
+      isRefreshing = false;
+
+      if (newToken) {
+        onRefreshed(newToken);
+        
+        headers.Authorization = `Bearer ${newToken}`;
+        return fetch(url, { ...options, headers });
+      }
     }
+
+    return new Promise((resolve) => {
+      subscribeTokenRefresh((newToken) => {
+        headers.Authorization = `Bearer ${newToken}`;
+        resolve(fetch(url, { ...options, headers }));
+      });
+    });
   }
 
   return response;
@@ -67,5 +90,16 @@ export function isAuthenticated() {
 
 export function getCurrentUser() {
   const userStr = localStorage.getItem('user');
-  return userStr ? JSON.parse(userStr) : null;
+  try {
+    return userStr ? JSON.parse(userStr) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+export function logout() {
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+  localStorage.removeItem('user');
+  window.location.href = '/login';
 }

@@ -15,25 +15,17 @@
 }
 
 .login-header {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  text-align: center;
   margin-bottom: 2rem;
 }
 
-.login-logo {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.shield-icon {
-  font-size: 2rem;
-}
-
-.login-logo h1 {
+.login-header h1 {
   font-size: 1.5rem;
   font-weight: bold;
+}
+
+.login-content {
+  width: 100%;
 }
 
 .login-card {
@@ -111,19 +103,37 @@
   background: rgba(255, 255, 255, 0.1);
 }
 
-.form-group input.error {
+.form-group input.input-error {
   border-color: #ef4444;
   box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
 }
 
-.error-message {
+.error-text {
   color: #fca5a5;
   font-size: 0.75rem;
   margin-top: 0.25rem;
 }
 
-.form-actions {
-  margin-top: 0.5rem;
+.forgot-password-link {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -0.5rem;
+}
+
+.link-style-btn {
+  background: none;
+  border: none;
+  color: #60a5fa;
+  cursor: pointer;
+  text-decoration: none;
+  font-size: 0.875rem;
+  transition: color 0.3s ease;
+  padding: 0;
+}
+
+.link-style-btn:hover {
+  color: #93c5fd;
+  text-decoration: underline;
 }
 
 .login-btn {
@@ -137,10 +147,7 @@
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
+  margin-top: 0.5rem;
 }
 
 .login-btn:hover:not(:disabled) {
@@ -155,44 +162,16 @@
   transform: none;
 }
 
-.spinner {
-  width: 18px;
-  height: 18px;
-  border: 2px solid transparent;
-  border-top: 2px solid white;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.register-link {
+.register-sec {
   text-align: center;
   margin-top: 2rem;
   padding-top: 2rem;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.register-link p {
+.register-sec p {
   color: #bfdbfe;
   font-size: 0.875rem;
-}
-
-.link-btn {
-  background: none;
-  border: none;
-  color: #60a5fa;
-  cursor: pointer;
-  text-decoration: underline;
-  font-size: inherit;
-  transition: color 0.3s ease;
-}
-
-.link-btn:hover {
-  color: #93c5fd;
 }
 
 @media (max-width: 480px) {

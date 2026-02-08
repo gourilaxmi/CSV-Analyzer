@@ -2,54 +2,73 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './ForgotPassword.css';
 
-function ForgotPassword() {
-  const [username, setUsername] = useState('');
-  const [errors, setErrors] = useState({});
-  const [isLoading, setIsLoading] = useState(false);
-  const [showResetModal, setShowResetModal] = useState(false);
+const ForgotPassword = () => {
+  const navigate = useNavigate();
+
+  const [ui, setUi] = useState({
+    isLoading: false,
+    errors: {},
+    showResetModal: false
+  });
+
+  const [loginId, setLoginId] = useState('');
+  
   const [resetData, setResetData] = useState({
     newPassword: '',
     confirmPassword: '',
   });
-  const navigate = useNavigate();
 
-  const handleUsernameSubmit = async (e) => {
+  const onChange = (e) => {
+    setLoginId(e.target.value);
+    if (ui.errors.loginId) {
+      setUi(prev => ({ ...prev, errors: { ...prev.errors, loginId: '' } }));
+    }
+  };
+
+  const onReset = (e) => {
+    const { name, value } = e.target;
+    setResetData(prev => ({ ...prev, [name]: value }));
+    if (ui.errors[name]) {
+      setUi(prev => ({ ...prev, errors: { ...prev.errors, [name]: '' } }));
+    }
+  };
+
+  const onSubmit = async (e) => {
     e.preventDefault();
     
-    if (!username.trim()) {
-      setErrors({ username: 'Username is required' });
+    if (!loginId.trim()) {
+      setUi(prev => ({ ...prev, errors: { loginId: 'Username or Email is required' } }));
       return;
     }
 
-    setIsLoading(true);
-    setErrors({});
+    setUi(prev => ({ ...prev, isLoading: true, errors: {} }));
 
     try {
       const response = await fetch('http://localhost:8000/api/auth/password-reset-request/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username }),
+        body: JSON.stringify({ login_id: loginId }),
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        // Show the reset modal
-        setShowResetModal(true);
+        setUi(prev => ({ ...prev, showResetModal: true }));
       } else {
-        setErrors({ general: data.error || 'Username not found' });
+        setUi(prev => ({ 
+          ...prev, 
+          errors: { general: data.login_id ? data.login_id[0] : 'Account not found' } 
+        }));
       }
     } catch (error) {
-      console.error('Password reset request error:', error);
-      setErrors({ general: 'Something went wrong. Please try again.' });
+      setUi(prev => ({ ...prev, errors: { general: 'Service unavailable. Please try again later.' } }));
     } finally {
-      setIsLoading(false);
+      setUi(prev => ({ ...prev, isLoading: false }));
     }
   };
 
-  const handlePasswordReset = async (e) => {
+  const onPasswordReset = async (e) => {
     e.preventDefault();
-    
     const newErrors = {};
     
     if (!resetData.newPassword) {
@@ -58,149 +77,96 @@ function ForgotPassword() {
       newErrors.newPassword = 'Password must be at least 8 characters';
     }
     
-    if (!resetData.confirmPassword) {
-      newErrors.confirmPassword = 'Please confirm your password';
-    } else if (resetData.newPassword !== resetData.confirmPassword) {
+    if (resetData.newPassword !== resetData.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
     }
 
     if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
+      setUi(prev => ({ ...prev, errors: newErrors }));
       return;
     }
 
-    setIsLoading(true);
-    setErrors({});
+    setUi(prev => ({ ...prev, isLoading: true, errors: {} }));
 
     try {
       const response = await fetch('http://localhost:8000/api/auth/password-reset-confirm/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username,
+          login_id: loginId,
           new_password: resetData.newPassword,
           new_password2: resetData.confirmPassword,
         }),
       });
 
-      const data = await response.json();
-
       if (response.ok) {
-        alert('Password reset successful! You can now login with your new password.');
         navigate('/login');
       } else {
-        setErrors({ general: data.error || 'Failed to reset password' });
+        const data = await response.json();
+        setUi(prev => ({ ...prev, errors: { general: data.error || 'Reset failed' } }));
       }
     } catch (error) {
-      console.error('Password reset error:', error);
-      setErrors({ general: 'Something went wrong. Please try again.' });
+      setUi(prev => ({ ...prev, errors: { general: 'Network error occurred.' } }));
     } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleResetDataChange = (e) => {
-    const { name, value } = e.target;
-    setResetData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-    
-    if (errors[name]) {
-      setErrors((prev) => ({ ...prev, [name]: '' }));
+      setUi(prev => ({ ...prev, isLoading: false }));
     }
   };
 
   return (
     <div className="forgot-password-page">
       <div className="forgot-password-container">
-        <div className="forgot-password-header">
-          <div className="forgot-password-logo">
-            <h1>CSV Data Analysis System</h1>
-          </div>
-        </div>
+        <header className="forgot-password-header">
+          <h1>CSV Data Analysis System</h1>
+        </header>
 
         <div className="forgot-password-card">
           <div className="card-header">
-            <h2>Reset Password</h2>
-            <p>Enter your username to reset your password</p>
+            <h2>Recover Account</h2>
+            <p>Enter your username or email address to reset your password</p>
           </div>
 
-          {errors.general && (
-            <div className="error-banner">
-              {errors.general}
-            </div>
-          )}
+          {ui.errors.general && <div className="error-banner">{ui.errors.general}</div>}
 
-          <form className="forgot-password-form" onSubmit={handleUsernameSubmit}>
+          <form className="forgot-password-form" onSubmit={onSubmit} noValidate>
             <div className="form-group">
-              <label htmlFor="username">Username</label>
+              <label htmlFor="loginId">Username or Email</label>
               <input
                 type="text"
-                id="username"
-                name="username"
-                value={username}
-                onChange={(e) => {
-                  setUsername(e.target.value);
-                  if (errors.username) {
-                    setErrors((prev) => ({ ...prev, username: '' }));
-                  }
-                }}
-                className={errors.username ? 'error' : ''}
-                placeholder="Enter your username"
+                id="loginId"
+                value={loginId}
+                onChange={onChange}
+                className={ui.errors.loginId ? 'input-error' : ''}
+                placeholder="user123 or user@example.com"
               />
-              {errors.username && (
-                <span className="error-message">{errors.username}</span>
-              )}
+              {ui.errors.loginId && <span className="error-text">{ui.errors.loginId}</span>}
             </div>
 
             <div className="form-actions">
-              <button
-                type="submit"
-                className="reset-btn"
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <>
-                    <span className="spinner"></span>
-                    Processing...
-                  </>
-                ) : (
-                  'Continue'
-                )}
+              <button type="submit" className="reset-btn" disabled={ui.isLoading}>
+                {ui.isLoading ? 'Verifying...' : 'Continue'}
               </button>
             </div>
           </form>
 
-          <div className="back-to-login">
-            <p>
-              Remember your password?{' '}
-              <button onClick={() => navigate('/login')} className="link-btn">
-                Back to Login
-              </button>
-            </p>
-          </div>
+          <footer className="back-to-login">
+            <button onClick={() => navigate('/login')} className="link-style-btn">
+              Back to Login
+            </button>
+          </footer>
         </div>
       </div>
 
-      {/* Password Reset Modal */}
-      {showResetModal && (
-        <div className="modal-overlay" onClick={() => setShowResetModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+      {ui.showResetModal && (
+        <div className="modal-overlay">
+          <div className="modal-content">
             <div className="modal-header">
               <h3>Set New Password</h3>
-              <button className="close-btn" onClick={() => setShowResetModal(false)}>
-                ✕
-              </button>
+              <button className="close-btn" onClick={() => setUi(prev => ({...prev, showResetModal: false}))}>✕</button>
             </div>
 
-            {errors.general && (
-              <div className="error-banner">
-                {errors.general}
-              </div>
-            )}
+            {ui.errors.general && <div className="error-banner">{ui.errors.general}</div>}
 
-            <form className="modal-body" onSubmit={handlePasswordReset}>
+            <form className="modal-body" onSubmit={onPasswordReset}>
               <div className="form-group">
                 <label htmlFor="newPassword">New Password</label>
                 <input
@@ -208,13 +174,10 @@ function ForgotPassword() {
                   id="newPassword"
                   name="newPassword"
                   value={resetData.newPassword}
-                  onChange={handleResetDataChange}
-                  className={errors.newPassword ? 'error' : ''}
-                  placeholder="Enter new password"
+                  onChange={onReset}
+                  className={ui.errors.newPassword ? 'input-error' : ''}
                 />
-                {errors.newPassword && (
-                  <span className="error-message">{errors.newPassword}</span>
-                )}
+                {ui.errors.newPassword && <span className="error-text">{ui.errors.newPassword}</span>}
               </div>
 
               <div className="form-group">
@@ -224,28 +187,14 @@ function ForgotPassword() {
                   id="confirmPassword"
                   name="confirmPassword"
                   value={resetData.confirmPassword}
-                  onChange={handleResetDataChange}
-                  className={errors.confirmPassword ? 'error' : ''}
-                  placeholder="Confirm new password"
+                  onChange={onReset}
+                  className={ui.errors.confirmPassword ? 'input-error' : ''}
                 />
-                {errors.confirmPassword && (
-                  <span className="error-message">{errors.confirmPassword}</span>
-                )}
+                {ui.errors.confirmPassword && <span className="error-text">{ui.errors.confirmPassword}</span>}
               </div>
 
-              <button
-                type="submit"
-                className="reset-btn"
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <>
-                    <span className="spinner"></span>
-                    Resetting...
-                  </>
-                ) : (
-                  'Reset Password'
-                )}
+              <button type="submit" className="reset-btn" disabled={ui.isLoading}>
+                {ui.isLoading ? 'Updating Password...' : 'Reset Password'}
               </button>
             </form>
           </div>
@@ -253,6 +202,6 @@ function ForgotPassword() {
       )}
     </div>
   );
-}
+};
 
 export default ForgotPassword;

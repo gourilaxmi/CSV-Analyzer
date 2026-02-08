@@ -1,78 +1,84 @@
 import os
+import json
 import logging
+import threading
 from django.conf import settings
 from django.db import transaction
 from .models import Dataset
 from .utils import process_csv, visualization_csv, pdf_report
-import threading
+
 logger = logging.getLogger(__name__)
 
 def process_dataset_task(dataset_id):
-
     try:
+        
         with transaction.atomic():
-            dataset = Dataset.objects.get(id=dataset_id)
+            dataset = Dataset.objects.select_for_update().get(id=dataset_id)
             dataset.status = 'processing'
             dataset.save()
 
         csv_path = dataset.dataset_file.path
-
         if not os.path.exists(csv_path):
-            raise FileNotFoundError(f"CSV file not found: {csv_path}")
+            raise FileNotFoundError(f"CSV file missing at: {csv_path}")
+
+        # make required directories if it doesn't exist to store csv files, charts ad pdf's
+        base_dir = os.path.join(settings.MEDIA_ROOT, "analysis", str(dataset.id))
+        chart_dir = os.path.join(base_dir, "charts")
+        pdf_dir = os.path.join(settings.MEDIA_ROOT, "pdfs")
         
-        output_dir = os.path.join(settings.MEDIA_ROOT, "charts", str(dataset.id))
-        os.makedirs(output_dir, exist_ok=True)
+        os.makedirs(chart_dir, exist_ok=True)
+        os.makedirs(pdf_dir, exist_ok=True)
 
-        #process csv
-        df, summary = process_csv(csv_path)
+        # do csv processing
+        df, stats = process_csv(csv_path)
 
-        #visualizations
-        viz = visualization_csv(df, output_dir, outlier_counts=summary.get('outliers', {}))
+        # create charts
+        viz = visualization_csv(
+            df, 
+            chart_dir, 
+            outlier_counts=stats.get('outliers', {}),
+            equip_dist=stats.get('equip_dist', {}),
+            equip_averages=stats.get('equip_averages', {})
+        )
         charts = viz.plots() 
 
-        #pdf report
         pdf_filename = f"report_{dataset.id}.pdf"
-        pdf_path = os.path.join(settings.MEDIA_ROOT, "pdfs", pdf_filename)
-        os.makedirs(os.path.dirname(pdf_path), exist_ok=True)
+        pdf_path = os.path.join(pdf_dir, pdf_filename)
         
-        pdf_report(pdf_path, summary, charts)
+        # pdf generation
+        pdf_report(pdf_path, stats, charts)
 
-        if not os.path.exists(pdf_path):
-            raise FileNotFoundError(f"PDF was not created: {pdf_path}")
+        #analysis results for Chart.js
+        analysis_results = {
+            'total_rows': stats.get('total_rows', 0),
+            'equipment_distribution': stats.get('equip_dist', {}),
+            'equipment_averages': stats.get('equip_averages', {}),
+            'field_statistics': stats.get('stats', {}),
+            'outliers': stats.get('outliers', {}),
+            'numeric_columns': list(df.select_dtypes(include=['number']).columns.tolist()),
+            'correlation_data': df.select_dtypes(include=['number']).corr().to_dict() if df.select_dtypes(include=['number']).shape[1] >= 2 else {}
+        }
 
         with transaction.atomic():
             dataset = Dataset.objects.select_for_update().get(id=dataset_id)
             dataset.pdf_file.name = f"pdfs/{pdf_filename}"
+            dataset.analysis_results = json.dumps(analysis_results)
             dataset.status = 'completed'
             dataset.error_log = None
             dataset.save()
 
-        return {"status": "success", "dataset_id": dataset_id}
-    
-    except Dataset.DoesNotExist:
-        return {"status": "error", "message": f"Dataset {dataset_id} not found"}
-
     except Exception as e:
-        try:
-            with transaction.atomic():
-                dataset = Dataset.objects.select_for_update().get(id=dataset_id)
-                dataset.status = 'failed'
-                dataset.error_log = str(e)
-                dataset.save()
-            
-            logger.info(f"Updated dataset {dataset_id} status to failed")
-        
-        except Exception as save_error:
-            logger.exception(f"Failed to update dataset status: {save_error}")
-        
-        return {"status": "error", "message": str(e)}
-            
-def start_processing_thread(dataset_id):
+        logger.exception(f"Failed to process dataset {dataset_id}")
+        Dataset.objects.filter(id=dataset_id).update(
+            status='failed', 
+            error_log=str(e)
+        )
 
+def start_processing_thread(dataset_id):
     thread = threading.Thread(
         target=process_dataset_task,
         args=(dataset_id,),
         daemon=True  
     )
     thread.start()
-    logger.info(f"Started processing thread for dataset {dataset_id}")
+    logger.info(f"Asynchronous thread started for Dataset ID: {dataset_id}")

@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Register.css';
 
-function Register({ onLogin }) {
+const Register = ({ onLogin }) => {
+  const navigate = useNavigate();
+
   const [formData, setFormData] = useState({
     username: '',
     email: '',
@@ -13,45 +15,44 @@ function Register({ onLogin }) {
     agreeToTerms: false,
   });
 
-  const navigate = useNavigate();
-  const [errors, setErrors] = useState({});
-  const [isLoading, setIsLoading] = useState(false);
+  const [ui, setUi] = useState({
+    isLoading: false,
+    errors: {},
+  });
 
-  const handleChange = (e) => {
+  const onChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData((prevState) => ({
-      ...prevState,
+    setFormData((prev) => ({
+      ...prev,
       [name]: type === 'checkbox' ? checked : value,
     }));
 
-    if (errors[name]) {
-      setErrors((prev) => ({ ...prev, [name]: '' }));
+    if (ui.errors[name]) {
+      setUi((prev) => ({
+        ...prev,
+        errors: { ...prev.errors, [name]: '' },
+      }));
     }
   };
 
-  const validateForm = () => {
+  const validate = () => {
     const newErrors = {};
-
-    if (!formData.username.trim())
-      newErrors.username = 'Username is required';
-    if (!formData.firstName.trim())
-      newErrors.firstName = 'First name is required';
-    if (!formData.lastName.trim())
-      newErrors.lastName = 'Last name is required';
-    if (!formData.email.trim())
-      newErrors.email = 'Email is required';
-    if (!formData.password)
-      newErrors.password = 'Password is required';
-    if (!formData.password2)
-      newErrors.password2 = 'Please confirm password';
-
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (formData.email && !emailRegex.test(formData.email)) {
-      newErrors.email = 'Please enter a valid email address';
+
+    if (!formData.username.trim()) newErrors.username = 'Username is required';
+    if (!formData.firstName.trim()) newErrors.firstName = 'First name is required';
+    if (!formData.lastName.trim()) newErrors.lastName = 'Last name is required';
+    
+    if (!formData.email.trim()) {
+      newErrors.email = 'Email is required';
+    } else if (!emailRegex.test(formData.email)) {
+      newErrors.email = 'Invalid email format';
     }
 
-    if (formData.password && formData.password.length < 8) {
-      newErrors.password = 'Password must be at least 8 characters long';
+    if (!formData.password) {
+      newErrors.password = 'Password is required';
+    } else if (formData.password.length < 8) {
+      newErrors.password = 'Password must be at least 8 characters';
     }
 
     if (formData.password !== formData.password2) {
@@ -59,22 +60,22 @@ function Register({ onLogin }) {
     }
 
     if (!formData.agreeToTerms) {
-      newErrors.agreeToTerms = 'You must agree to the terms and conditions';
+      newErrors.agreeToTerms = 'You must agree to the terms';
     }
 
     return newErrors;
   };
 
-  const handleSubmit = async (e) => {
+  const onSubmit = async (e) => {
     e.preventDefault();
-    const validationErrors = validateForm();
+    const validationErrors = validate();
     
     if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
+      setUi(prev => ({ ...prev, errors: validationErrors }));
       return;
     }
 
-    setIsLoading(true);
+    setUi(prev => ({ ...prev, isLoading: true }));
 
     try {
       const response = await fetch('http://localhost:8000/api/auth/register/', {
@@ -93,212 +94,161 @@ function Register({ onLogin }) {
       const data = await response.json();
 
       if (response.ok) {
-        alert('Registration successful!');
         onLogin(data.user, data.tokens);
         navigate('/main');
       } else {
-        const errorMessages = {};
+        const backendErrors = {};
         Object.keys(data).forEach(key => {
-          if (Array.isArray(data[key])) {
-            errorMessages[key] = data[key][0];
-          } else {
-            errorMessages[key] = data[key];
-          }
+          backendErrors[key] = Array.isArray(data[key]) ? data[key][0] : data[key];
         });
-        setErrors(errorMessages);
+        setUi(prev => ({ ...prev, errors: backendErrors }));
       }
     } catch (error) {
       console.error('Registration error:', error);
-      alert('Something went wrong. Please try again.');
+      alert('Network error. Please try again later.');
     } finally {
-      setIsLoading(false);
+      setUi(prev => ({ ...prev, isLoading: false }));
     }
-  };
-
-  const handleGoToLogin = () => {
-    navigate('/login');
   };
 
   return (
     <div className="register-page">
       <div className="register-container">
-        <div className="register-header">
-          <div className="register-logo">
-            <h1>Screening Task</h1>
-          </div>
-        </div>
+        <header className="register-header">
+          <h1>CSV Data Analysis System</h1>
+        </header>
 
-        <div className="register-content">
+        <main className="register-content">
           <div className="register-card">
             <div className="card-header">
               <h2>Create Your Account</h2>
+              <p>Join us to start analyzing your data</p>
             </div>
 
-            <form className="register-form" onSubmit={handleSubmit}>
-              <div className="form-section">
-                <h3>Personal Information</h3>
+            <form className="register-form" onSubmit={onSubmit} noValidate>
+              <section className="form-section">
+                <h3>Personal Details</h3>
                 
                 <div className="form-group">
-                  <label htmlFor="username">Username *</label>
+                  <label htmlFor="username">Username</label>
                   <input
                     type="text"
                     id="username"
                     name="username"
                     value={formData.username}
-                    onChange={handleChange}
-                    className={errors.username ? 'error' : ''}
-                    placeholder="Enter your username"
+                    onChange={onChange}
+                    className={ui.errors.username ? 'input-error' : ''}
+                    placeholder="juser123"
                   />
-                  {errors.username && (
-                    <span className="error-message">{errors.username}</span>
-                  )}
+                  {ui.errors.username && <span className="error-text">{ui.errors.username}</span>}
                 </div>
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label htmlFor="firstName">First Name *</label>
+                    <label htmlFor="firstName">First Name</label>
                     <input
                       type="text"
                       id="firstName"
                       name="firstName"
                       value={formData.firstName}
-                      onChange={handleChange}
-                      className={errors.firstName ? 'error' : ''}
-                      placeholder="Enter your first name"
+                      onChange={onChange}
+                      className={ui.errors.firstName ? 'input-error' : ''}
                     />
-                    {errors.firstName && (
-                      <span className="error-message">{errors.firstName}</span>
-                    )}
+                    {ui.errors.firstName && <span className="error-text">{ui.errors.firstName}</span>}
                   </div>
 
                   <div className="form-group">
-                    <label htmlFor="lastName">Last Name *</label>
+                    <label htmlFor="lastName">Last Name</label>
                     <input
                       type="text"
                       id="lastName"
                       name="lastName"
                       value={formData.lastName}
-                      onChange={handleChange}
-                      className={errors.lastName ? 'error' : ''}
-                      placeholder="Enter your last name"
+                      onChange={onChange}
+                      className={ui.errors.lastName ? 'input-error' : ''}
                     />
-                    {errors.lastName && (
-                      <span className="error-message">{errors.lastName}</span>
-                    )}
+                    {ui.errors.lastName && <span className="error-text">{ui.errors.lastName}</span>}
                   </div>
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="email">Email Address *</label>
+                  <label htmlFor="email">Email Address</label>
                   <input
                     type="email"
                     id="email"
                     name="email"
                     value={formData.email}
-                    onChange={handleChange}
-                    className={errors.email ? 'error' : ''}
-                    placeholder="Enter your email address"
+                    onChange={onChange}
+                    className={ui.errors.email ? 'input-error' : ''}
+                    placeholder="user@example.com"
                   />
-                  {errors.email && (
-                    <span className="error-message">{errors.email}</span>
-                  )}
+                  {ui.errors.email && <span className="error-text">{ui.errors.email}</span>}
                 </div>
-              </div>
+              </section>
 
-              <div className="form-section">
+              <section className="form-section">
                 <h3>Security</h3>
                 <div className="form-row">
                   <div className="form-group">
-                    <label htmlFor="password">Password *</label>
+                    <label htmlFor="password">Password</label>
                     <input
                       type="password"
                       id="password"
                       name="password"
                       value={formData.password}
-                      onChange={handleChange}
-                      className={errors.password ? 'error' : ''}
-                      placeholder="Create a strong password"
+                      onChange={onChange}
+                      className={ui.errors.password ? 'input-error' : ''}
+                      autoComplete="new-password"
                     />
-                    {errors.password && (
-                      <span className="error-message">{errors.password}</span>
-                    )}
+                    {ui.errors.password && <span className="error-text">{ui.errors.password}</span>}
                   </div>
 
                   <div className="form-group">
-                    <label htmlFor="password2">Confirm Password *</label>
+                    <label htmlFor="password2">Confirm</label>
                     <input
                       type="password"
                       id="password2"
                       name="password2"
                       value={formData.password2}
-                      onChange={handleChange}
-                      className={errors.password2 ? 'error' : ''}
-                      placeholder="Confirm your password"
+                      onChange={onChange}
+                      className={ui.errors.password2 ? 'input-error' : ''}
+                      autoComplete="new-password"
                     />
-                    {errors.password2 && (
-                      <span className="error-message">{errors.password2}</span>
-                    )}
+                    {ui.errors.password2 && <span className="error-text">{ui.errors.password2}</span>}
                   </div>
                 </div>
+              </section>
+
+              <div className="checkbox-section">
+                <label className="custom-checkbox">
+                  <input
+                    type="checkbox"
+                    name="agreeToTerms"
+                    checked={formData.agreeToTerms}
+                    onChange={onChange}
+                  />
+                  <span>I agree to the Terms & Privacy Policy</span>
+                </label>
+                {ui.errors.agreeToTerms && <span className="error-text">{ui.errors.agreeToTerms}</span>}
               </div>
 
-              <div className="form-section">
-                <div className="checkbox-group">
-                  <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      name="agreeToTerms"
-                      checked={formData.agreeToTerms}
-                      onChange={handleChange}
-                    />
-                    <span className="checkmark"></span>
-                    I agree to the{' '}
-                    <a href="#" className="link">
-                      Terms and Conditions
-                    </a>{' '}
-                    and{' '}
-                    <a href="#" className="link">
-                      Privacy Policy
-                    </a>{' '}
-                    *
-                  </label>
-                  {errors.agreeToTerms && (
-                    <span className="error-message">{errors.agreeToTerms}</span>
-                  )}
-                </div>
-              </div>
-
-              <div className="form-actions">
-                <button
-                  type="submit"
-                  className="register-btn"
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <>
-                      <span className="spinner"></span>
-                      Creating Account...
-                    </>
-                  ) : (
-                    'Create Account'
-                  )}
-                </button>
-              </div>
+              <button type="submit" className="register-btn" disabled={ui.isLoading}>
+                {ui.isLoading ? 'Creating Account...' : 'Register'}
+              </button>
             </form>
 
-            <div className="login-link">
-              <p>
-                Already have an account?{' '}
-                <button onClick={handleGoToLogin} className="link-btn">
-                  Sign in here
+            <footer className="login-sec">
+              <p>Already have an account? 
+                <button className="link-style-btn" onClick={() => navigate('/login')}>
+                  Sign in
                 </button>
               </p>
-            </div>
+            </footer>
           </div>
-        </div>
+        </main>
       </div>
     </div>
   );
-}
+};
 
 export default Register;

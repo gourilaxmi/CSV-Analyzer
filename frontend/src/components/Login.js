@@ -2,130 +2,116 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Login.css';
 
-function Login({ onLogin }) {
-  const [formData, setFormData] = useState({
-    username: '',
+const Login = ({ onLogin }) => {
+  const navigate = useNavigate();
+
+  const [credentials, setCredentials] = useState({
+    login_id: '',
     password: '',
   });
 
-  const navigate = useNavigate();
-  const [errors, setErrors] = useState({});
-  const [isLoading, setIsLoading] = useState(false);
+  const [ui, setUi] = useState({
+    isLoading: false,
+    errors: {},
+    serverError: ''
+  });
 
-  const handleChange = (e) => {
+  const onChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prevState) => ({
-      ...prevState,
-      [name]: value,
-    }));
-
-    if (errors[name]) {
-      setErrors((prev) => ({ ...prev, [name]: '' }));
+    setCredentials(prev => ({ ...prev, [name]: value }));
+    
+    if (ui.errors[name]) {
+      setUi(prev => ({
+        ...prev,
+        errors: { ...prev.errors, [name]: '' }
+      }));
     }
   };
 
-  const validateForm = () => {
+  const validate = () => {
     const newErrors = {};
-
-    if (!formData.username.trim())
-      newErrors.username = 'Username is required';
-    if (!formData.password)
-      newErrors.password = 'Password is required';
-
+    if (!credentials.login_id.trim()) newErrors.login_id = 'Username or Email is required.';
+    if (!credentials.password) newErrors.password = 'Password is required.';
     return newErrors;
   };
 
-  const handleSubmit = async (e) => {
+  const onSubmit = async (e) => {
     e.preventDefault();
-    const validationErrors = validateForm();
     
+    const validationErrors = validate();
     if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
+      setUi(prev => ({ ...prev, errors: validationErrors }));
       return;
     }
 
-    setIsLoading(true);
+    setUi(prev => ({ ...prev, isLoading: true, serverError: '' }));
 
     try {
-      const response = await fetch('http://localhost:8000/api/auth/token/', {
+      const response = await fetch('http://localhost:8000/api/auth/login/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: formData.username,
-          password: formData.password,
-        }),
+        body: JSON.stringify(credentials),
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        // Fetch user profile
-        const profileResponse = await fetch('http://localhost:8000/api/auth/profile/', {
-          headers: {
-            'Authorization': `Bearer ${data.access}`,
-          },
+        onLogin(data.user, { 
+          access: data.tokens.access, 
+          refresh: data.tokens.refresh 
         });
-
-        const userData = await profileResponse.json();
-        
-        onLogin(userData, { access: data.access, refresh: data.refresh });
         navigate('/main');
       } else {
-        setErrors({ general: 'Invalid username or password' });
+        setUi(prev => ({
+          ...prev,
+          serverError: data.error || 'Check your credentials and try again.'
+        }));
       }
-    } catch (error) {
-      console.error('Login error:', error);
-      setErrors({ general: 'Something went wrong. Please try again.' });
+    } catch (err) {
+      console.error("Auth Exception:", err);
+      setUi(prev => ({
+        ...prev,
+        serverError: 'Service unavailable. Please try again later.'
+      }));
     } finally {
-      setIsLoading(false);
+      setUi(prev => ({ ...prev, isLoading: false }));
     }
-  };
-
-  const handleGoToRegister = () => {
-    navigate('/register');
-  };
-
-  const handleForgotPassword = () => {
-    navigate('/forgot-password');
   };
 
   return (
     <div className="login-page">
       <div className="login-container">
-        <div className="login-header">
-          <div className="login-logo">
-            <h1>CSV Data Analysis System</h1>
-          </div>
-        </div>
+        <header className="login-header">
+          <h1>CSV Data Analysis System</h1>
+        </header>
 
-        <div className="login-content">
+        <main className="login-content">
           <div className="login-card">
             <div className="card-header">
               <h2>Welcome Back</h2>
-              <p>Sign in to access your data analysis dashboard</p>
+              <p>Sign in to your dashboard</p>
             </div>
 
-            {errors.general && (
-              <div className="error-banner">
-                {errors.general}
+            {ui.serverError && (
+              <div className="error-banner" role="alert">
+                {ui.serverError}
               </div>
             )}
 
-            <form className="login-form" onSubmit={handleSubmit}>
+            <form className="login-form" onSubmit={onSubmit} noValidate>
               <div className="form-group">
-                <label htmlFor="username">Username</label>
+                <label htmlFor="login_id">Username or Email</label>
                 <input
                   type="text"
-                  id="username"
-                  name="username"
-                  value={formData.username}
-                  onChange={handleChange}
-                  className={errors.username ? 'error' : ''}
-                  placeholder="Enter your username"
+                  id="login_id"
+                  name="login_id"
+                  placeholder="Enter username or email"
+                  value={credentials.login_id}
+                  onChange={onChange}
+                  className={ui.errors.login_id ? 'input-error' : ''}
+                  autoComplete="username"
                 />
-                {errors.username && (
-                  <span className="error-message">{errors.username}</span>
-                )}
+                {ui.errors.login_id && <span className="error-text">{ui.errors.login_id}</span>}
               </div>
 
               <div className="form-group">
@@ -134,58 +120,46 @@ function Login({ onLogin }) {
                   type="password"
                   id="password"
                   name="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  className={errors.password ? 'error' : ''}
                   placeholder="Enter your password"
+                  value={credentials.password}
+                  onChange={onChange}
+                  className={ui.errors.password ? 'input-error' : ''}
+                  autoComplete="current-password"
                 />
-                {errors.password && (
-                  <span className="error-message">{errors.password}</span>
-                )}
+                {ui.errors.password && <span className="error-text">{ui.errors.password}</span>}
               </div>
 
-              <div style={{ textAlign: 'right', marginTop: '-0.5rem' }}>
+              <div className="forgot-password-link">
                 <button 
                   type="button" 
-                  onClick={handleForgotPassword} 
-                  className="link-btn"
-                  style={{ fontSize: '0.875rem' }}
+                  className="link-style-btn"
+                  onClick={() => navigate('/forgot-password')}
                 >
                   Forgot password?
                 </button>
               </div>
 
-              <div className="form-actions">
-                <button
-                  type="submit"
-                  className="login-btn"
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <>
-                      <span className="spinner"></span>
-                      Signing In...
-                    </>
-                  ) : (
-                    'Sign In'
-                  )}
-                </button>
-              </div>
+              <button 
+                type="submit" 
+                className="login-btn" 
+                disabled={ui.isLoading}
+              >
+                {ui.isLoading ? 'Verifying...' : 'Sign In'}
+              </button>
             </form>
 
-            <div className="register-link">
-              <p>
-                Don't have an account?{' '}
-                <button onClick={handleGoToRegister} className="link-btn">
+            <footer className="register-sec">
+              <p>Don't have an account? 
+                <button className="link-style-btn" onClick={() => navigate('/register')}>
                   Register here
                 </button>
               </p>
-            </div>
+            </footer>
           </div>
-        </div>
+        </main>
       </div>
     </div>
   );
-}
+};
 
 export default Login;
