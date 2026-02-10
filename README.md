@@ -212,7 +212,7 @@ npm install
 
 #### Configure Environment
 
-Create `.env.local` file in `frontend/` directory:
+Create `.env.local` file in `frontend/src` directory:
 ```env
 REACT_APP_API_URL=http://localhost:8000
 ```
