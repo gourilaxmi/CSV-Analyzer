@@ -8,7 +8,6 @@ from config import STYLES
 from client_utils.api_client import APIClient
 from client_utils.helpers import extract_error_message
 
-
 class ChangePasswordDialog(QWidget):
     def __init__(self, token, parent=None):
         super().__init__(parent)
