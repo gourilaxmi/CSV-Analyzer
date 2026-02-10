@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from './config';
 import './ForgotPassword.css';
 
 const ForgotPassword = () => {
@@ -44,7 +45,7 @@ const ForgotPassword = () => {
     setUi(prev => ({ ...prev, isLoading: true, errors: {} }));
 
     try {
-      const response = await fetch('http://localhost:8000/api/auth/password-reset-request/', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/password-reset-request/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ login_id: loginId }),
@@ -89,7 +90,7 @@ const ForgotPassword = () => {
     setUi(prev => ({ ...prev, isLoading: true, errors: {} }));
 
     try {
-      const response = await fetch('http://localhost:8000/api/auth/password-reset-confirm/', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/password-reset-confirm/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

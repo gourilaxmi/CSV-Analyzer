@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from './config';
 import './Login.css';
 
 const Login = ({ onLogin }) => {
@@ -47,7 +48,7 @@ const Login = ({ onLogin }) => {
     setUi(prev => ({ ...prev, isLoading: true, serverError: '' }));
 
     try {
-      const response = await fetch('http://localhost:8000/api/auth/login/', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/login/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials),

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch, isAuthenticated } from './apiHelper';
+import { API_BASE_URL } from './config';
 import './Downloads.css';
 
 function Downloads({ user, onLogout }) {
@@ -18,7 +19,7 @@ function Downloads({ user, onLogout }) {
 
   const fetchDatasets = useCallback(async () => {
     try {
-      const response = await apiFetch('http://localhost:8000/api/datasets/');
+      const response = await apiFetch(`${API_BASE_URL}/api/datasets/`);
 
       if (response.ok) {
         const data = await response.json();
@@ -59,7 +60,7 @@ function Downloads({ user, onLogout }) {
 
   const handleDownload = async (datasetId) => {
     try {
-      const response = await apiFetch(`http://localhost:8000/api/download-pdf/${datasetId}/`);
+      const response = await apiFetch(`${API_BASE_URL}/api/download-pdf/${datasetId}/`);
 
       if (response.ok) {
         const blob = await response.blob();
@@ -84,7 +85,7 @@ function Downloads({ user, onLogout }) {
   const handleLogoutClick = async () => {
     try {
       const refreshToken = localStorage.getItem('refresh_token');
-      await apiFetch('http://localhost:8000/api/auth/logout/', {
+      await apiFetch(`${API_BASE_URL}/api/auth/logout/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refresh: refreshToken }),
